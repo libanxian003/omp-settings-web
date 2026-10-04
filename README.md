@@ -2,22 +2,33 @@
 
 **[English](README.md) | [中文](README_CN.md)**
 
-A tiny local web UI for [oh-my-pi (omp)](https://omp.sh): switch model roles and edit all settings in Chinese, by clicking. The settings page organizes 500+ keys into ~35 sidebar categories, each entry with a curated Chinese name & description. A **中文 / EN** toggle in the header switches the entire UI to English — item names, descriptions, sidebar categories, buttons and messages (defaults to Chinese; the choice persists in localStorage). See the [English screenshot](docs/screenshot-settings-en.png).
-
-| Model roles | Settings |
-|---|---|
-| ![roles](docs/screenshot-roles.png) | ![settings](docs/screenshot-settings-sidebar.png) |
-| ![roles editing](docs/screenshot-roles-editing.png) | ![settings search](docs/screenshot-settings-search.png) |
-
-Settings page in English:
-
-![settings in English](docs/screenshot-settings-en.png)
-
 ## Screenshots
 
-| Desktop widget | Usage dashboard | Model visibility |
-|---|---|---|
-| ![desktop widget](docs/screenshot-widget.png) | ![usage](docs/screenshot-usage.png) | ![model visibility](docs/screenshot-models.png) |
+**Desktop widget** — always-on-top quota bars:
+
+![desktop widget](docs/screenshot-widget.png)
+
+**Usage dashboard** — per-provider quota cards:
+
+![usage](docs/screenshot-usage.png)
+
+**Model roles** — two-level picker:
+
+![roles](docs/screenshot-roles.png)
+
+![roles editing](docs/screenshot-roles-editing.png)
+
+**Settings** — categorized sidebar (English mode):
+
+![settings](docs/screenshot-settings-en.png)
+
+![settings sidebar](docs/screenshot-settings-sidebar.png)
+
+![settings search](docs/screenshot-settings-search.png)
+
+**Model visibility** — pick which models appear in `/model`:
+
+![model visibility](docs/screenshot-models.png)
 
 ## Features
 
