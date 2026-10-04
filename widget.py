@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""omp quota desktop widget: borderless, always-on-top, dark; data from `omp usage --json`.
+"""omp quota desktop widget: borderless, desktop-level (below all app windows), dark; data from `omp usage --json`.
 
 Run with pythonw (no console). Drag anywhere to move; position is remembered.
 Right-click menu: Refresh / Force refresh / Open web panel / Quit. Stdlib only.
@@ -131,7 +131,7 @@ class Widget:
         self.root = root = tk.Tk()
         root.title("Model Quota")
         root.overrideredirect(True)
-        root.attributes("-topmost", True)
+        # Desktop-level: stay beneath every app window (re-sink after any click/focus)
         root.attributes("-alpha", 0.95)
         root.configure(bg=EDGE)
         self.k = root.winfo_fpixels("1i") / 96  # 像素尺寸随 DPI 缩放
@@ -163,13 +163,15 @@ class Widget:
         # Child widgets share the toplevel's bindtags, so bind once on root for full-window drag
         root.bind("<ButtonPress-1>", self.drag_start)
         root.bind("<B1-Motion>", self.drag_move)
-        root.bind("<ButtonRelease-1>", lambda e: self.save_state())
+        root.bind("<ButtonRelease-1>", lambda e: (self.save_state(), self.sink()))
+        root.bind("<FocusIn>", lambda e: root.after(10, self.sink))
         root.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
 
         self.data, self.err, self.fetched = None, None, None
         self.loading, self.placed = False, False
         self.result: tuple | None = None  # worker thread writes (data, err); collect() consumes
         root.after(50, self.round_corners)
+        root.after(60, self.sink)
         self.render()
         self.auto_refresh()
         root.after(TICK_MS, self.tick)
@@ -299,6 +301,15 @@ class Widget:
             hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
             pref = ctypes.c_int(2)
             ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref))
+        except (AttributeError, OSError):
+            pass
+
+    def sink(self):
+        """Push window to the bottom of the z-order (HWND_BOTTOM) without activating it."""
+        try:
+            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            # SWP_NOSIZE|SWP_NOMOVE|SWP_NOACTIVATE
+            ctypes.windll.user32.SetWindowPos(hwnd, 1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
         except (AttributeError, OSError):
             pass
 

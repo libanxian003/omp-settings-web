@@ -4,7 +4,7 @@
 
 ## Screenshots
 
-**Desktop widget** — always-on-top remaining quota per provider:
+**Desktop widget** — desktop-level panel (stays beneath app windows) showing remaining quota per provider:
 
 ![desktop widget](docs/widget.png)
 
@@ -49,7 +49,7 @@
 
 **Desktop widget** (`widget.py`)
 
-- A borderless, always-on-top, dark mini window showing every provider's rate-limit windows from `omp usage --json` — compact bars showing remaining quota (colored by how much is left), remaining %, reset countdown, and a badge for saved reset credits. Runs standalone (no dependency on the web server), refreshes every 60 s, drag anywhere to move (position is remembered), right-click for refresh / force-refresh / open web panel / quit. Single-instance guarded; Win11 rounded corners; per-monitor DPI aware; `omp` subprocesses run without console windows.
+- A borderless dark mini window pinned to the desktop layer (never covers other apps) showing every provider's rate-limit windows from `omp usage --json` — compact bars showing remaining quota (colored by how much is left), remaining %, reset countdown, and a badge for saved reset credits. Runs standalone (no dependency on the web server), refreshes every 60 s, drag anywhere to move (position is remembered), right-click for refresh / force-refresh / open web panel / quit. Single-instance guarded; Win11 rounded corners; per-monitor DPI aware; `omp` subprocesses run without console windows.
 
 ## Requirements
 
