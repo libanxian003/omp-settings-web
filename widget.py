@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""omp 额度桌面小窗：置顶、无边框、暗色，数据来自 `omp usage --json`。
+"""omp quota desktop widget: borderless, always-on-top, dark; data from `omp usage --json`.
 
-用 pythonw 运行（无控制台）。拖动任意位置移动，位置自动记住；
-右键菜单：立即刷新 / 强制刷新 / 打开网页面板 / 退出。纯标准库。
+Run with pythonw (no console). Drag anywhere to move; position is remembered.
+Right-click menu: Refresh / Force refresh / Open web panel / Quit. Stdlib only.
 """
 import ctypes
 import json
@@ -31,11 +31,11 @@ STATUS_COLOR = {"ok": "#3fb950", "warning": "#d29922", "exhausted": "#f85149"}
 UNKNOWN_COLOR = "#58a6ff"
 FONT = "Microsoft YaHei UI"
 NUM_FONT = "Segoe UI"
-WIN_TAG = {"weekly": "7d", "daily": "1d", "monthly": "月"}
+WIN_TAG = {"weekly": "7d", "daily": "1d", "monthly": "1mo"}
 
 
 def single_instance():
-    """命名互斥量防双开（计划任务与手动启动撞车时后者直接退出）。"""
+    """Named mutex prevents a second instance (scheduled task vs manual start)."""
     if sys.platform != "win32":
         return True
     k32 = ctypes.windll.kernel32
@@ -55,12 +55,12 @@ def fetch_usage(invalidate):
             run_omp(["usage", "invalidate"], 60)
         p = run_omp(["usage", "--json"], 120)
     except (OSError, subprocess.TimeoutExpired) as e:
-        return None, f"omp 调用失败：{e}"
+        return None, f"omp call failed: {e}"
     try:
         return json.loads(p.stdout), None
     except json.JSONDecodeError:
         err = (p.stderr or "").strip().splitlines()
-        return None, err[0] if err else "omp usage 输出无法解析"
+        return None, err[0] if err else "unparseable omp usage output"
 
 
 def win_tag(w):
@@ -75,7 +75,7 @@ def win_tag(w):
 
 
 def provider_rows(rep):
-    """同一共享窗口（sharedGroup）只取一次；同名限额重复出现时加窗口标签区分。"""
+    """Dedup shared windows; append a window tag when identical labels repeat."""
     limits, seen = [], set()
     for lim in rep.get("limits") or []:
         w = lim.get("window") or {}
@@ -97,7 +97,7 @@ def provider_rows(rep):
         label = (lim.get("label") or "").replace(" (shared)", "")
         rows.append({
             "name": f"{label} {tag}".strip() if repeated else (tag or label),
-            "frac": frac,  # 剩余比例：满条=额度充足
+            "frac": frac,  # remaining fraction: full bar = quota healthy
             "status": lim.get("status") or "unknown",
             "resets": w.get("resetsAt"),
         })
@@ -109,12 +109,12 @@ def time_left(ts):
         return ""
     s = ts / 1000 - time.time()
     if s <= 60:
-        return "即将重置"
+        return "due"
     d, m = divmod(int(s // 60), 1440)
     h, m = divmod(m, 60)
     if d:
-        return f"{d}天{h}时"
-    return f"{h}时{m}分" if h else f"{m}分"
+        return f"{d}d{h}h"
+    return f"{h}h{m:02d}m" if h else f"{m}m"
 
 
 def virtual_screen(root):
@@ -129,7 +129,7 @@ def virtual_screen(root):
 class Widget:
     def __init__(self):
         self.root = root = tk.Tk()
-        root.title("模型使用额度")
+        root.title("Model Quota")
         root.overrideredirect(True)
         root.attributes("-topmost", True)
         root.attributes("-alpha", 0.95)
@@ -140,7 +140,7 @@ class Widget:
         card.pack(padx=1, pady=1)
         head = tk.Frame(card, bg=BG)
         head.pack(fill="x")
-        tk.Label(head, text="模型使用额度", font=(FONT, 10, "bold"), fg=FG, bg=BG).pack(side="left")
+        tk.Label(head, text="Model Quota", font=(FONT, 10, "bold"), fg=FG, bg=BG).pack(side="left")
         close = tk.Label(head, text="×", font=(NUM_FONT, 11), fg=DIM, bg=BG, cursor="hand2")
         close.pack(side="right", padx=(self.px(6), 0))
         close.bind("<Button-1>", lambda e: self.quit())
@@ -154,13 +154,13 @@ class Widget:
 
         self.menu = tk.Menu(root, tearoff=0, bg="#1f232b", fg=FG, activebackground="#2d6cdf",
                             activeforeground="#fff", bd=0, font=(FONT, 9))
-        self.menu.add_command(label="立即刷新", command=self.refresh)
-        self.menu.add_command(label="强制刷新（重新抓取）", command=lambda: self.refresh(True))
-        self.menu.add_command(label="打开网页面板", command=lambda: webbrowser.open(WEB_URL))
+        self.menu.add_command(label="Refresh", command=self.refresh)
+        self.menu.add_command(label="Force refresh (re-fetch)", command=lambda: self.refresh(True))
+        self.menu.add_command(label="Open web panel", command=lambda: webbrowser.open(WEB_URL))
         self.menu.add_separator()
-        self.menu.add_command(label="退出", command=self.quit)
+        self.menu.add_command(label="Quit", command=self.quit)
 
-        # 子控件的 bindtags 含所属顶层窗口，绑在 root 上即可全窗拖动
+        # Child widgets share the toplevel's bindtags, so bind once on root for full-window drag
         root.bind("<ButtonPress-1>", self.drag_start)
         root.bind("<B1-Motion>", self.drag_move)
         root.bind("<ButtonRelease-1>", lambda e: self.save_state())
@@ -168,7 +168,7 @@ class Widget:
 
         self.data, self.err, self.fetched = None, None, None
         self.loading, self.placed = False, False
-        self.result: tuple | None = None  # 工作线程写入 (data, err)，主线程 collect() 取走
+        self.result: tuple | None = None  # worker thread writes (data, err); collect() consumes
         root.after(50, self.round_corners)
         self.render()
         self.auto_refresh()
@@ -177,7 +177,7 @@ class Widget:
     def px(self, n):
         return int(round(n * self.k))
 
-    # ---------- 数据 ----------
+    # ---------- data ----------
     def auto_refresh(self):
         self.refresh()
         self.root.after(REFRESH_MS, self.auto_refresh)
@@ -186,7 +186,7 @@ class Widget:
         if self.loading:
             return
         self.loading = True
-        self.stamp.config(text="刷新中…")
+        self.stamp.config(text="…")
 
         def work():
             self.result = fetch_usage(invalidate)
@@ -208,12 +208,12 @@ class Widget:
 
     def tick(self):
         if not self.loading:
-            self.render()  # 只为更新重置倒计时
+            self.render()  # countdowns only
         self.root.after(TICK_MS, self.tick)
 
-    # ---------- 绘制 ----------
+    # ---------- draw ----------
     def render(self):
-        """结构（供应商/行/角标/错误）不变时原地改文字和进度条，避免整窗重建抖动。"""
+        """Update text/bars in place while the structure is unchanged (no rebuild flicker)."""
         self.stamp.config(text=time.strftime("%H:%M", time.localtime(self.fetched)) if self.fetched else "")
         reports = [(r, provider_rows(r)) for r in (self.data or {}).get("reports") or []]
         reports = [(r, rows) for r, rows in reports if rows]
@@ -229,7 +229,7 @@ class Widget:
         for w in self.body.winfo_children():
             w.destroy()
         if not reports:
-            msg = self.err or ("加载中…" if self.data is None else "没有可显示的额度数据")
+            msg = self.err or ("Loading…" if self.data is None else "No quota data")
             tk.Label(self.body, text=msg, font=(FONT, 9), fg=DIM, bg=BG,
                      wraplength=self.px(240), justify="left").grid(row=0, column=0, sticky="w")
         line = 0
@@ -257,7 +257,7 @@ class Widget:
             tk.Label(f, text=plan, font=(FONT, 8), fg=DIM, bg=BG).pack(side="left", padx=(self.px(6), 0))
         n = (rep.get("resetCredits") or {}).get("availableCount")
         if n:
-            tk.Label(f, text=f"券×{n}", font=(FONT, 8), fg="#e3b341", bg="#2b2616",
+            tk.Label(f, text=f"credit×{n}", font=(FONT, 8), fg="#e3b341", bg="#2b2616",
                      padx=self.px(5)).pack(side="right")
 
     def limit_row(self, r, line):
@@ -284,7 +284,7 @@ class Widget:
         if frac is not None:
             end = c + (w - 2 * c) * min(1.0, max(0.0, frac))
             bar.coords(fill, c, c, max(end, c + 0.1), c)
-            # 按剩余量着色：越多越绿，见底变红
+            # Green when plenty left, red when nearly exhausted
             color = "#3fb950" if frac > 0.25 else ("#d29922" if frac > 0.05 else "#f85149")
             bar.itemconfig(fill, state="normal", fill=color)
         else:
@@ -292,9 +292,9 @@ class Widget:
         pct.config(text="—" if frac is None else f"{round(frac * 100)}%")
         left.config(text=time_left(r["resets"]))
 
-    # ---------- 窗口 ----------
+    # ---------- window ----------
     def round_corners(self):
-        """Win11 圆角（DWMWA_WINDOW_CORNER_PREFERENCE=33 → DWMWCP_ROUND）；旧系统静默跳过。"""
+        """Win11 rounded corners (DWMWA_WINDOW_CORNER_PREFERENCE=33 → DWMWCP_ROUND); no-op elsewhere."""
         try:
             hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
             pref = ctypes.c_int(2)
@@ -311,7 +311,7 @@ class Widget:
             x, y = int(st["x"]), int(st["y"])
         except (OSError, ValueError, KeyError, TypeError):
             x, y = self.root.winfo_screenwidth() - width - self.px(24), self.px(80)
-        x = min(max(x, x0), x1 - self.px(60))  # 显示器变动后别落在屏幕外
+        x = min(max(x, x0), x1 - self.px(60))  # keep on-screen after monitor changes
         y = min(max(y, y0), y1 - self.px(40))
         self.root.geometry(f"+{x}+{y}")
 
@@ -338,7 +338,7 @@ def main():
     if not single_instance():
         return
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # 高分屏不发虚
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # crisp on HiDPI
     except (AttributeError, OSError):
         pass
     Widget().root.mainloop()
