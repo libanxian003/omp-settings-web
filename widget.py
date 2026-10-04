@@ -127,7 +127,7 @@ def virtual_screen(root):
 class Widget:
     def __init__(self):
         self.root = root = tk.Tk()
-        root.title("omp 额度")
+        root.title("额度")
         root.overrideredirect(True)
         root.attributes("-topmost", True)
         root.attributes("-alpha", 0.95)
@@ -138,7 +138,7 @@ class Widget:
         card.pack(padx=1, pady=1)
         head = tk.Frame(card, bg=BG)
         head.pack(fill="x")
-        tk.Label(head, text="omp 额度", font=(FONT, 10, "bold"), fg=FG, bg=BG).pack(side="left")
+        tk.Label(head, text="额度", font=(FONT, 10, "bold"), fg=FG, bg=BG).pack(side="left")
         close = tk.Label(head, text="×", font=(NUM_FONT, 11), fg=DIM, bg=BG, cursor="hand2")
         close.pack(side="right", padx=(self.px(6), 0))
         close.bind("<Button-1>", lambda e: self.quit())
