@@ -163,15 +163,14 @@ class Widget:
         # Child widgets share the toplevel's bindtags, so bind once on root for full-window drag
         root.bind("<ButtonPress-1>", self.drag_start)
         root.bind("<B1-Motion>", self.drag_move)
-        root.bind("<ButtonRelease-1>", lambda e: (self.save_state(), self.sink()))
-        root.bind("<FocusIn>", lambda e: root.after(10, self.sink))
+        root.bind("<ButtonRelease-1>", lambda e: self.save_state())
         root.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
 
         self.data, self.err, self.fetched = None, None, None
         self.loading, self.placed = False, False
         self.result: tuple | None = None  # worker thread writes (data, err); collect() consumes
         root.after(50, self.round_corners)
-        root.after(60, self.sink)
+        root.after(60, self.pin_bottom)
         self.render()
         self.auto_refresh()
         root.after(TICK_MS, self.tick)
@@ -304,14 +303,39 @@ class Widget:
         except (AttributeError, OSError):
             pass
 
-    def sink(self):
-        """Push window to the bottom of the z-order (HWND_BOTTOM) without activating it."""
-        try:
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
-            # SWP_NOSIZE|SWP_NOMOVE|SWP_NOACTIVATE
-            ctypes.windll.user32.SetWindowPos(hwnd, 1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
-        except (AttributeError, OSError):
-            pass
+    def pin_bottom(self):
+        """Keep the window at the bottom of the z-order. Subclass the toplevel's wndproc and
+        rewrite every WM_WINDOWPOSCHANGING (click activation, drag, Tk raise) to HWND_BOTTOM,
+        so the window never surfaces above other apps, not even for a frame."""
+        if sys.platform != "win32":
+            return
+        from ctypes import wintypes
+        u = ctypes.windll.user32
+        lresult = ctypes.c_ssize_t
+        wndproc_t = ctypes.WINFUNCTYPE(lresult, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+
+        class WINDOWPOS(ctypes.Structure):
+            _fields_ = [("hwnd", wintypes.HWND), ("hwndInsertAfter", wintypes.HWND),
+                        ("x", ctypes.c_int), ("y", ctypes.c_int), ("cx", ctypes.c_int), ("cy", ctypes.c_int),
+                        ("flags", wintypes.UINT)]
+
+        u.SetWindowLongPtrW.restype = ctypes.c_void_p
+        u.SetWindowLongPtrW.argtypes = (wintypes.HWND, ctypes.c_int, ctypes.c_void_p)
+        u.CallWindowProcW.restype = lresult
+        u.CallWindowProcW.argtypes = (ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+        hwnd = u.GetParent(self.root.winfo_id())
+        old = []
+
+        def proc(h, msg, wp, lp):
+            if msg == 0x0046:  # WM_WINDOWPOSCHANGING
+                pos = ctypes.cast(lp, ctypes.POINTER(WINDOWPOS)).contents
+                pos.hwndInsertAfter = 1  # HWND_BOTTOM
+                pos.flags &= ~0x0004  # clear SWP_NOZORDER
+            return u.CallWindowProcW(old[0], h, msg, wp, lp)
+
+        self._wndproc = wndproc_t(proc)  # keep a reference, or ctypes frees the thunk
+        old.append(u.SetWindowLongPtrW(hwnd, -4, ctypes.cast(self._wndproc, ctypes.c_void_p)))  # GWLP_WNDPROC
+        u.SetWindowPos(hwnd, 1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)  # initial sink: NOSIZE|NOMOVE|NOACTIVATE
 
     def place(self):
         self.placed = True
