@@ -145,7 +145,7 @@ class Widget:
         again = tk.Label(head, text="⟳", font=(NUM_FONT, 10), fg=DIM, bg=BG, cursor="hand2")
         again.pack(side="right", padx=(self.px(6), 0))
         again.bind("<Button-1>", lambda e: self.refresh())
-        self.stamp = tk.Label(head, text="", font=(FONT, 8), fg=DIM, bg=BG)
+        self.stamp = tk.Label(head, text="", font=(FONT, 8), fg=DIM, bg=BG, width=8, anchor="e")
         self.stamp.pack(side="right")
         self.body = tk.Frame(card, bg=BG)
         self.body.pack(fill="x", pady=(self.px(4), 0))
@@ -211,11 +211,21 @@ class Widget:
 
     # ---------- 绘制 ----------
     def render(self):
-        for w in self.body.winfo_children():
-            w.destroy()
+        """结构（供应商/行/角标/错误）不变时原地改文字和进度条，避免整窗重建抖动。"""
         self.stamp.config(text=time.strftime("%H:%M", time.localtime(self.fetched)) if self.fetched else "")
         reports = [(r, provider_rows(r)) for r in (self.data or {}).get("reports") or []]
         reports = [(r, rows) for r, rows in reports if rows]
+        sig = (tuple((r.get("provider"), (r.get("metadata") or {}).get("planType"),
+                      (r.get("resetCredits") or {}).get("availableCount"),
+                      tuple(x["name"] for x in rows)) for r, rows in reports),
+               self.err, self.data is None)
+        if sig == getattr(self, "sig", None):
+            for cells, r in zip(self.cells, (x for _, rows in reports for x in rows)):
+                self.fill_row(cells, r)
+            return
+        self.sig, self.cells = sig, []
+        for w in self.body.winfo_children():
+            w.destroy()
         if not reports:
             msg = self.err or ("加载中…" if self.data is None else "没有可显示的额度数据")
             tk.Label(self.body, text=msg, font=(FONT, 9), fg=DIM, bg=BG,
@@ -225,7 +235,7 @@ class Widget:
             self.header(rep, line, top=self.px(8) if i else self.px(2))
             line += 1
             for r in rows:
-                self.limit_row(r, line)
+                self.cells.append(self.limit_row(r, line))
                 line += 1
         if self.err and reports:
             tk.Label(self.body, text=self.err, font=(FONT, 8), fg=STATUS_COLOR["exhausted"], bg=BG,
@@ -256,16 +266,27 @@ class Widget:
         bar.grid(row=line, column=1)
         c = h / 2
         bar.create_line(c, c, w - c, c, width=h, capstyle="round", fill=TRACK)
-        frac = r["frac"]
+        fill = bar.create_line(c, c, c, c, width=h, capstyle="round", state="hidden")
+        pct = tk.Label(self.body, font=(NUM_FONT, 9), fg=FG, bg=BG, width=4, anchor="e")
+        pct.grid(row=line, column=2, padx=(self.px(6), 0))
+        left = tk.Label(self.body, font=(FONT, 8), fg=DIM, bg=BG, width=8, anchor="e")
+        left.grid(row=line, column=3, sticky="e", padx=(self.px(8), 0))
+        cells = (bar, fill, pct, left)
+        self.fill_row(cells, r)
+        return cells
+
+    def fill_row(self, cells, r):
+        bar, fill, pct, left = cells
+        w, h = int(bar["width"]), int(bar["height"])
+        c, frac = h / 2, r["frac"]
         if frac:
             end = c + (w - 2 * c) * min(1.0, max(0.0, frac))
-            bar.create_line(c, c, max(end, c + 0.1), c, width=h, capstyle="round",
-                            fill=STATUS_COLOR.get(r["status"], UNKNOWN_COLOR))
-        pct = "—" if frac is None else f"{round(frac * 100)}%"
-        tk.Label(self.body, text=pct, font=(NUM_FONT, 9), fg=FG, bg=BG, width=4, anchor="e").grid(
-            row=line, column=2, padx=(self.px(6), 0))
-        tk.Label(self.body, text=time_left(r["resets"]), font=(FONT, 8), fg=DIM, bg=BG,
-                 anchor="e").grid(row=line, column=3, sticky="e", padx=(self.px(8), 0))
+            bar.coords(fill, c, c, max(end, c + 0.1), c)
+            bar.itemconfig(fill, state="normal", fill=STATUS_COLOR.get(r["status"], UNKNOWN_COLOR))
+        else:
+            bar.itemconfig(fill, state="hidden")
+        pct.config(text="—" if frac is None else f"{round(frac * 100)}%")
+        left.config(text=time_left(r["resets"]))
 
     # ---------- 窗口 ----------
     def round_corners(self):
