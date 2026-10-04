@@ -4,31 +4,25 @@
 
 ## Screenshots
 
-**Desktop widget** — always-on-top quota bars:
+**Desktop widget** — always-on-top remaining quota per provider:
 
-![desktop widget](docs/screenshot-widget.png)
+![desktop widget](docs/widget.png)
 
-**Usage dashboard** — per-provider quota cards:
+**Usage dashboard** — per-provider quota cards with force-refresh and reset-credit redemption:
 
-![usage](docs/screenshot-usage.png)
+![usage dashboard](docs/en/usage.png)
 
-**Model roles** — two-level picker:
+**Model roles** — beginner notes per role, two-level picker to switch models:
 
-![roles](docs/screenshot-roles.png)
+![model roles](docs/en/roles.png)
 
-![roles editing](docs/screenshot-roles-editing.png)
+**All settings** — 529 keys in a categorized sidebar, each with an explanation:
 
-**Settings** — categorized sidebar (English mode):
+![all settings](docs/en/settings.png)
 
-![settings](docs/screenshot-settings-en.png)
+**Model visibility** — choose which models appear in the `/model` picker:
 
-![settings sidebar](docs/screenshot-settings-sidebar.png)
-
-![settings search](docs/screenshot-settings-search.png)
-
-**Model visibility** — pick which models appear in `/model`:
-
-![model visibility](docs/screenshot-models.png)
+![model visibility](docs/en/models.png)
 
 ## Features
 
@@ -55,7 +49,7 @@
 
 **Desktop widget** (`widget.py`)
 
-- A borderless, always-on-top, dark mini window showing every provider's rate-limit windows from `omp usage --json` — compact bars colored by remaining quota, used %, reset countdown, and a badge for saved reset credits. Runs standalone (no dependency on the web server), refreshes every 60 s, drag anywhere to move (position is remembered), right-click for refresh / force-refresh / open web panel / quit. Single-instance guarded; Win11 rounded corners; per-monitor DPI aware; `omp` subprocesses run without console windows.
+- A borderless, always-on-top, dark mini window showing every provider's rate-limit windows from `omp usage --json` — compact bars showing remaining quota (colored by how much is left), remaining %, reset countdown, and a badge for saved reset credits. Runs standalone (no dependency on the web server), refreshes every 60 s, drag anywhere to move (position is remembered), right-click for refresh / force-refresh / open web panel / quit. Single-instance guarded; Win11 rounded corners; per-monitor DPI aware; `omp` subprocesses run without console windows.
 
 ## Requirements
 
