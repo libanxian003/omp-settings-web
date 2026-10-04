@@ -88,14 +88,16 @@ def provider_rows(rep):
     rows = []
     for lim in limits:
         w, a = lim.get("window") or {}, lim.get("amount") or {}
-        frac = a.get("usedFraction")
-        if frac is None and a.get("limit"):
-            frac = (a.get("used") or 0) / a["limit"]
+        used = a.get("usedFraction")
+        if used is None and a.get("limit"):
+            used = (a.get("used") or 0) / a["limit"]
+        remain = a.get("remainingFraction")
+        frac = remain if remain is not None else (None if used is None else 1.0 - used)
         tag = win_tag(w)
         label = (lim.get("label") or "").replace(" (shared)", "")
         rows.append({
             "name": f"{label} {tag}".strip() if repeated else (tag or label),
-            "frac": frac,
+            "frac": frac,  # 剩余比例：满条=额度充足
             "status": lim.get("status") or "unknown",
             "resets": w.get("resetsAt"),
         })
@@ -127,7 +129,7 @@ def virtual_screen(root):
 class Widget:
     def __init__(self):
         self.root = root = tk.Tk()
-        root.title("额度")
+        root.title("模型使用额度")
         root.overrideredirect(True)
         root.attributes("-topmost", True)
         root.attributes("-alpha", 0.95)
@@ -138,7 +140,7 @@ class Widget:
         card.pack(padx=1, pady=1)
         head = tk.Frame(card, bg=BG)
         head.pack(fill="x")
-        tk.Label(head, text="额度", font=(FONT, 10, "bold"), fg=FG, bg=BG).pack(side="left")
+        tk.Label(head, text="模型使用额度", font=(FONT, 10, "bold"), fg=FG, bg=BG).pack(side="left")
         close = tk.Label(head, text="×", font=(NUM_FONT, 11), fg=DIM, bg=BG, cursor="hand2")
         close.pack(side="right", padx=(self.px(6), 0))
         close.bind("<Button-1>", lambda e: self.quit())
@@ -279,10 +281,12 @@ class Widget:
         bar, fill, pct, left = cells
         w, h = int(bar["width"]), int(bar["height"])
         c, frac = h / 2, r["frac"]
-        if frac:
+        if frac is not None:
             end = c + (w - 2 * c) * min(1.0, max(0.0, frac))
             bar.coords(fill, c, c, max(end, c + 0.1), c)
-            bar.itemconfig(fill, state="normal", fill=STATUS_COLOR.get(r["status"], UNKNOWN_COLOR))
+            # 按剩余量着色：越多越绿，见底变红
+            color = "#3fb950" if frac > 0.25 else ("#d29922" if frac > 0.05 else "#f85149")
+            bar.itemconfig(fill, state="normal", fill=color)
         else:
             bar.itemconfig(fill, state="hidden")
         pct.config(text="—" if frac is None else f"{round(frac * 100)}%")
