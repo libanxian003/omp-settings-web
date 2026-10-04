@@ -38,6 +38,12 @@ A tiny local web UI for [oh-my-pi (omp)](https://omp.sh): switch model roles and
 
 ![usage dashboard](docs/screenshot-usage.png)
 
+**桌面小窗 / Desktop widget** (`widget.py`)
+
+- A borderless, always-on-top, dark mini window showing every provider's rate-limit windows from `omp usage --json` — compact bars colored by status, used %, reset countdown, and a badge for saved reset credits. Runs standalone (no dependency on the web server), refreshes every 60 s, drag anywhere to move (position is remembered), right-click for refresh / force-refresh / open web panel / quit. Single-instance guarded; Win11 rounded corners; per-monitor DPI aware; `omp` subprocesses run without console windows. 置顶无边框暗色小窗，直接读 `omp usage --json` 展示各供应商额度窗口（按状态着色的进度条、已用百分比、重置倒计时、额度券角标）；独立运行不依赖网页服务，60 秒自动刷新，任意处拖动且记住位置，右键可刷新/强制刷新/打开网页面板/退出；防双开、Win11 圆角、高分屏清晰、调用 omp 不弹控制台。
+
+![desktop widget](docs/screenshot-widget.png)
+
 ![model visibility](docs/screenshot-models.png)
 
 ## Requirements / 依赖
@@ -50,6 +56,12 @@ A tiny local web UI for [oh-my-pi (omp)](https://omp.sh): switch model roles and
 ```bash
 python server.py            # starts http://127.0.0.1:8788 and opens your browser
 python server.py --no-browser
+```
+
+Desktop widget / 桌面小窗：
+
+```bash
+pythonw widget.py           # no console window; right-click the widget for the menu
 ```
 
 Open [http://127.0.0.1:8788](http://127.0.0.1:8788), click **切换** on a role, pick a provider group, then a model, **保存**. The change applies immediately — running omp sessions pick it up, no restart needed.
