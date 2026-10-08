@@ -260,7 +260,7 @@ const T = {
     uNoLimits: '无可用限额数据',
     uCredits: n => `重置额度券 ×${n}`,
     uExpire: ds => `过期 ${ds}`,
-    uRemain: v => `剩余 ${v}`,
+    uRemain: v => `剩余 ${v}`, uUsed: v => `已用 ${v}`,
     uReset: '重置于 ', uResetNow: '即将重置',
     uNoUsageAcct: n => `无用量端点的账号 ×${n}`,
     uDisabledCred: n => `已停用凭据 ×${n}`,
@@ -337,7 +337,7 @@ const T = {
     uNoLimits: 'No limit data available',
     uCredits: n => `Reset credits ×${n}`,
     uExpire: ds => `expiring ${ds}`,
-    uRemain: v => `${v} left`,
+    uRemain: v => `${v} left`, uUsed: v => `${v} used`,
     uReset: 'resets ', uResetNow: 'resetting soon',
     uNoUsageAcct: n => `Accounts without usage endpoints ×${n}`,
     uDisabledCred: n => `Disabled credentials ×${n}`,
@@ -986,15 +986,20 @@ function uLimitRow(l) {
   }
   const am = document.createElement('span');
   am.className = 'amt';
-  am.textContent = amt.limit != null
-    ? `${fmtAmt(amt.used, unit)} / ${fmtAmt(amt.limit, unit)}`
-    : fmtAmt(amt.used, unit);
+  const usedFrac = amt.usedFraction != null
+    ? amt.usedFraction
+    : (amt.limit ? (amt.used || 0) / amt.limit : null);
+  const remaining = amt.remaining != null ? amt.remaining
+    : amt.limit != null && amt.used != null ? amt.limit - amt.used
+    : unit === 'percent' && amt.used != null ? 100 - amt.used
+    : unit === 'percent' && usedFrac != null ? (1 - usedFrac) * 100
+    : null;
+  am.textContent = t().uRemain(fmtAmt(remaining, unit))
+    + (amt.limit != null && unit !== 'percent' ? ` / ${fmtAmt(amt.limit, unit)}` : '');
   top.append(nm, am);
   row.appendChild(top);
 
-  const frac = amt.usedFraction != null
-    ? amt.usedFraction
-    : (amt.limit ? (amt.used || 0) / amt.limit : 0);
+  const frac = usedFrac != null ? 1 - usedFrac : 0; // bar length = remaining share
   const bar = document.createElement('div');
   bar.className = 'u-bar';
   const fill = document.createElement('div');
@@ -1006,7 +1011,7 @@ function uLimitRow(l) {
   const sub = document.createElement('div');
   sub.className = 'u-sub';
   const bits = [];
-  if (amt.remaining != null) bits.push(t().uRemain(fmtAmt(amt.remaining, unit)));
+  if (amt.used != null && amt.limit != null && unit !== 'percent') bits.push(t().uUsed(fmtAmt(amt.used, unit)));
   if (l.status && l.status !== 'ok') bits.push(l.status);
   const left = document.createElement('span');
   left.textContent = bits.join(' · ');
