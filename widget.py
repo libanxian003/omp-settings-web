@@ -104,6 +104,20 @@ def provider_rows(rep):
     return rows
 
 
+def load_state():
+    try:
+        st = json.loads(STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return st if isinstance(st, dict) else {}
+
+
+def ordered(reports, order):
+    """Providers named in `order` come first, in that order; the rest keep omp's order."""
+    rank = {p: i for i, p in enumerate(order)}
+    return sorted(reports, key=lambda x: rank.get(x[0].get("provider"), len(rank)))
+
+
 def time_left(ts):
     if not ts:
         return ""
@@ -159,6 +173,12 @@ class Widget:
         self.menu.add_command(label="Open web panel", command=lambda: webbrowser.open(WEB_URL))
         self.menu.add_separator()
         self.menu.add_command(label="Quit", command=self.quit)
+        self.pmenu = tk.Menu(root, tearoff=0, bg="#1f232b", fg=FG, activebackground="#2d6cdf",
+                             activeforeground="#fff", bd=0, font=(FONT, 9))
+        self.state = load_state()
+        order = self.state.get("order")
+        self.order = [p for p in order if isinstance(p, str)] if isinstance(order, list) else []
+        self.shown: list[str] = []
 
         # Child widgets share the toplevel's bindtags, so bind once on root for full-window drag
         root.bind("<ButtonPress-1>", self.drag_start)
@@ -217,7 +237,8 @@ class Widget:
         """Update text/bars in place while the structure is unchanged (no rebuild flicker)."""
         self.stamp.config(text=time.strftime("%H:%M", time.localtime(self.fetched)) if self.fetched else "")
         reports = [(r, provider_rows(r)) for r in (self.data or {}).get("reports") or []]
-        reports = [(r, rows) for r, rows in reports if rows]
+        reports = ordered([(r, rows) for r, rows in reports if rows], self.order)
+        self.shown = [r.get("provider") or "?" for r, _ in reports]
         sig = (tuple((r.get("provider"), (r.get("metadata") or {}).get("planType"),
                       (r.get("resetCredits") or {}).get("availableCount"),
                       tuple(x["name"] for x in rows)) for r, rows in reports),
@@ -260,6 +281,39 @@ class Widget:
         if n:
             tk.Label(f, text=f"credit×{n}", font=(FONT, 8), fg="#e3b341", bg="#2b2616",
                      padx=self.px(5)).pack(side="right")
+        prov = rep.get("provider") or "?"
+        for w in (f, *f.winfo_children()):
+            w.bind("<Button-3>", lambda e, p=prov: self.provider_menu(e, p))
+
+    def provider_menu(self, e, prov):
+        """Right-click on a provider header: reorder providers (saved to widget-state.json)."""
+        i = self.shown.index(prov)
+        m = self.pmenu
+        m.delete(0, "end")
+        m.add_command(label="Move up", command=lambda: self.move(prov, -1),
+                      state="normal" if i > 0 else "disabled")
+        m.add_command(label="Move down", command=lambda: self.move(prov, 1),
+                      state="normal" if i < len(self.shown) - 1 else "disabled")
+        m.add_command(label="Reset order", command=self.reset_order,
+                      state="normal" if self.order else "disabled")
+        m.add_separator()
+        m.add_command(label="Refresh", command=self.refresh)
+        m.add_command(label="Quit", command=self.quit)
+        m.tk_popup(e.x_root, e.y_root)
+        return "break"  # keep the window-wide menu from opening too
+
+    def move(self, prov, delta):
+        names = list(self.shown)
+        i = names.index(prov)
+        names[i], names[i + delta] = names[i + delta], names[i]
+        self.order = names
+        self.save_state()
+        self.render()
+
+    def reset_order(self):
+        self.order = []
+        self.save_state()
+        self.render()
 
     def limit_row(self, r, line):
         tk.Label(self.body, text=r["name"], font=(FONT, 9), fg=FG, bg=BG).grid(
@@ -342,9 +396,8 @@ class Widget:
         x0, y0, x1, y1 = virtual_screen(self.root)
         width = self.root.winfo_reqwidth()
         try:
-            st = json.loads(STATE.read_text(encoding="utf-8"))
-            x, y = int(st["x"]), int(st["y"])
-        except (OSError, ValueError, KeyError, TypeError):
+            x, y = int(self.state["x"]), int(self.state["y"])
+        except (ValueError, KeyError, TypeError):
             x, y = self.root.winfo_screenwidth() - width - self.px(24), self.px(80)
         x = min(max(x, x0), x1 - self.px(60))  # keep on-screen after monitor changes
         y = min(max(y, y0), y1 - self.px(40))
@@ -358,9 +411,13 @@ class Widget:
         self.root.geometry(f"+{e.x_root - dx}+{e.y_root - dy}")
 
     def save_state(self):
+        self.state.update(x=self.root.winfo_x(), y=self.root.winfo_y())
+        if self.order:
+            self.state["order"] = self.order
+        else:
+            self.state.pop("order", None)
         try:
-            STATE.write_text(json.dumps({"x": self.root.winfo_x(), "y": self.root.winfo_y()}),
-                             encoding="utf-8")
+            STATE.write_text(json.dumps(self.state), encoding="utf-8")
         except OSError:
             pass
 
